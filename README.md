@@ -67,12 +67,13 @@ next zone level:
 
     −130, −125, …, −5, −1, 0, 1, …, 10, 15, 20, …, 70
 
-1 m steps from −1 to +10 m, 5 m elsewhere, so today's coastline is the edge
-between zones `0` (water at sea level 0) and `1` (first land zone).
+1 m steps from −1 to +10 m, 5 m elsewhere. Today's sea is `flood_level <= -1`;
+zone `0` is land at sea level (dry today), so today's coastline is the edge
+between zones `-1` and `0`.
 `flood_level = -130` is sea at every slider position (the oceans); land that
 stays dry above +70 m has no polygon.
 
-Styling at sea level `L`: `flood_level <= L` is water, `L < flood_level <= 0`
+Styling at sea level `L`: `flood_level <= L` is water, `L < flood_level <= -1`
 is dry sea floor (land colour), anything else transparent so the basemap
 shows today's land and lakes (e.g. the Caspian below its +25 m overflow).
 
