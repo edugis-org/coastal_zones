@@ -105,6 +105,48 @@ map.setGlobalStateProperty('sea_level', 60);
 (`global-state` needs MapLibre GL JS ≥ 5.6; otherwise rebuild the expression
 with `map.setPaintProperty` on each slider change.)
 
+## Download
+
+The tile archive is published as a release asset, so it needs no build:
+
+```bash
+gh release download --repo edugis-org/coastal_zones --pattern coastal_zones.pmtiles
+# or
+curl -LO https://github.com/edugis-org/coastal_zones/releases/latest/download/coastal_zones.pmtiles
+```
+
+Release assets are not served with CORS headers, so a browser cannot read
+them directly: copy the archive to your own static host (any host that
+answers HTTP range requests, GitHub Pages included).
+
+## Licence
+
+- **Scripts**: MIT.
+- **Data products** (`flood_level.tif`, `zones.gpkg`, `coastal_zones.pmtiles`):
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
+These data exist thanks to GEBCO, whose grid is in the public domain and may
+be copied, adapted and used commercially, on condition that the source is
+acknowledged (GEBCO terms of use). The attribution for these data therefore
+names both:
+
+> Coastal zones: EduGIS (github.com/edugis-org/coastal_zones), derived from
+> the GEBCO_2026 Grid, GEBCO Bathymetric Compilation Group 2026,
+> doi:10.5285/4f68d5c7-45eb-f999-e063-7086abc036fa
+
+A short form for a map's attribution control is
+`Coastal zones: EduGIS, from GEBCO_2026 Grid`.
+
+These data are not endorsed by GEBCO, the IHO or the IOC, and — like the
+GEBCO Grid — must not be used for navigation or safety at sea.
+
+## Used by
+
+The [webmapx](https://github.com/edugis-org/webmapx) sea level tool
+(`type: "sealevel"`) drives this layer with a slider from −134 m to +70 m,
+optionally through time along a sea level curve. Configuration and behaviour:
+[docs/user/components/webmapx-sealevel-tool.md](https://github.com/edugis-org/webmapx/blob/main/docs/user/components/webmapx-sealevel-tool.md).
+
 ## Todo
 
 - Figure out how inland seas (Caspian, Black Sea, Baltic) behaved before they
