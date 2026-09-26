@@ -5,11 +5,12 @@ Each polygon carries `flood_level`: the sea level (m) at which it becomes sea,
 rounded up to the next zone level. A slider at level L paints
 `flood_level <= L` as water.
 
-Zone levels run MIN..MAX (default -130..+70 m: roughly the last glacial
-maximum up to beyond any melt scenario) in STEP metres, with finer FINE_STEP
-steps between FINE_MIN and FINE_MAX around the present coastline:
+Zone levels run MIN..MAX (default -134..+70 m: the lowest sea level of the
+last glacial maximum, ~21 ka, up to beyond any melt scenario) at multiples of
+STEP metres, with finer FINE_STEP steps between FINE_MIN and FINE_MAX around
+the present coastline:
 
-    -130, -125, ..., -5, -1, 0, 1, ..., 10, 15, 20, ..., 70
+    -134, -130, -125, ..., -5, -1, 0, 1, ..., 10, 15, 20, ..., 70
 
     flood_level = MIN        sea at every slider position
     flood_level = level      becomes sea at that level
@@ -35,7 +36,7 @@ import rasterio
 HERE = Path(__file__).resolve().parent
 DATA = HERE / "data"
 SRC = DATA / "flood_level.tif"
-MIN = int(os.environ.get("MIN", "-130"))
+MIN = int(os.environ.get("MIN", "-134"))
 MAX = int(os.environ.get("MAX", "70"))
 STEP = int(os.environ.get("STEP", "5"))
 FINE_MIN = int(os.environ.get("FINE_MIN", "-1"))
@@ -51,7 +52,8 @@ def run(*cmd):
 
 
 def zone_levels():
-    coarse = np.arange(MIN, MAX + 1, STEP)
+    coarse = np.arange(-(-MIN // STEP) * STEP, MAX + 1, STEP)
+    coarse = np.union1d([MIN, MAX], coarse)
     fine = np.arange(FINE_MIN, FINE_MAX + 1, FINE_STEP)
     return np.union1d(coarse, fine).astype(np.int16)
 

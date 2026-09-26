@@ -1,8 +1,16 @@
-# Coastal zones −130 … +70 m
+# Coastal zones −134 … +70 m
 
 Vector zones for animating global coastlines under changing sea level, from
-roughly the last glacial maximum (−130 m) to +70 m. Geometry is fixed; the
+the lowest sea level of the last glacial maximum (−134 m, ~21 ka) to +70 m. Geometry is fixed; the
 animation only changes styling.
+
+## Goal
+
+The goal of this dataset is an animation of sea-level rise since the last
+glacial maximum up to now, and of the maximum possible rise in the future (up
+to +70 m). Sea level was lowest, about −134 m, at ~21 ka, after a slow fall
+from ~29 ka; the main rise started ~16.5 ka (Lambeck et al. 2014,
+[doi:10.1073/pnas.1411762111](https://doi.org/10.1073/pnas.1411762111)).
 
 Each polygon has one attribute, `flood_level`: the sea level (m) at which that
 area becomes sea **via a connection to the ocean**. A slider at level `L`
@@ -65,12 +73,12 @@ the global grid (~5 min). `make_zones.py` picks the range and steps from it
 The flood level is median-resampled to 4′ (~7 km), then rounded **up** to the
 next zone level:
 
-    −130, −125, …, −5, −1, 0, 1, …, 10, 15, 20, …, 70
+    −134, −130, −125, …, −5, −1, 0, 1, …, 10, 15, 20, …, 70
 
 1 m steps from −1 to +10 m, 5 m elsewhere. Today's sea is `flood_level <= -1`;
 zone `0` is land at sea level (dry today), so today's coastline is the edge
 between zones `-1` and `0`.
-`flood_level = -130` is sea at every slider position (the oceans); land that
+`flood_level = -134` is sea at every slider position (the oceans); land that
 stays dry above +70 m has no polygon.
 
 Styling at sea level `L`: `flood_level <= L` is water, `L < flood_level <= -1`
@@ -96,3 +104,12 @@ map.setGlobalStateProperty('sea_level', 60);
 
 (`global-state` needs MapLibre GL JS ≥ 5.6; otherwise rebuild the expression
 with `map.setPaintProperty` on each slider change.)
+
+## Todo
+
+- Figure out how inland seas (Caspian, Black Sea, Baltic) behaved before they
+  connected to the oceans; the model now treats them as flooding only once the
+  ocean spills over their sill.
+- The Mediterranean disconnection (Messinian, ~5 Ma ago) is not included.
+- A more precise model for the Netherlands, Belgium and Bangladesh would be
+  nice.
