@@ -2,114 +2,66 @@
 """Turn the flood-level raster into coastline zone polygons.
 
 Each polygon carries `flood_level`: the sea level (m) at which it becomes sea,
-rounded up to STEP. A slider at level L paints `flood_level <= L` as water.
+rounded up to the next zone level. A slider at level L paints
+`flood_level <= L` as water.
 
-    flood_level = -195, -190, ..., 100   (STEP=5)
-    flood_level = 101                     land that stays dry up to +100 m
-    (no polygon)                          sea at/below -200 m -> map background
+Zone levels run MIN..MAX (default -130..+70 m: roughly the last glacial
+maximum up to beyond any melt scenario) in STEP metres, with finer FINE_STEP
+steps between FINE_MIN and FINE_MAX around the present coastline:
 
-Zone polygons are built at three resolutions so vector tiles stay light at
-low zoom (median-resampled flood level, then quantised):
+    -130, -125, ..., -5, 0, 1, 2, ..., 10, 15, 20, ..., 70
 
-    r0  15"  native GEBCO   zoom 7+
-    r1  1'   4x coarser     zoom 4-6
-    r2  4'  16x coarser     zoom 0-3
+    flood_level = MIN        sea at every slider position
+    flood_level = level      becomes sea at that level
+    (no polygon)             stays dry up to MAX -> map background
 
-Polygonising the full 86400x43200 grid is split into chunks run in parallel;
-polygons are cut at chunk edges, which is invisible for filled rendering.
+The native 15" GEBCO grid is median-resampled by FACTOR first (default 16,
+i.e. 4' ~ 7 km), which is plenty for a global animation.
 
 Usage:
-    ./make_zones.py                  # STEP=5
-    STEP=10 ./make_zones.py
-    LEVELS=r2,r1 ./make_zones.py     # only some resolutions
+    ./make_zones.py
+    STEP=10 FINE_MAX=20 ./make_zones.py
+    MIN=-200 MAX=100 FACTOR=4 ./make_zones.py
 """
 
 import os
 import subprocess
 import sys
-import time
-from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import numpy as np
 import rasterio
-from rasterio.windows import Window
 
 HERE = Path(__file__).resolve().parent
 DATA = HERE / "data"
 SRC = DATA / "flood_level.tif"
+MIN = int(os.environ.get("MIN", "-130"))
+MAX = int(os.environ.get("MAX", "70"))
 STEP = int(os.environ.get("STEP", "5"))
+FINE_MIN = int(os.environ.get("FINE_MIN", "0"))
+FINE_MAX = int(os.environ.get("FINE_MAX", "10"))
+FINE_STEP = int(os.environ.get("FINE_STEP", "1"))
+FACTOR = int(os.environ.get("FACTOR", "16"))
 NODATA = -32768
-CHUNK = 5400
-JOBS = int(os.environ.get("JOBS", os.cpu_count() or 4))
-RESOLUTIONS = {"r0": 1, "r1": 4, "r2": 16}  # name -> downsample factor
+OUT = DATA / "zones.gpkg"
 
 
 def run(*cmd):
     subprocess.run([str(c) for c in cmd], check=True)
 
 
-def quantise(a):
-    """flood level (-201..101) -> zone value, NODATA for always-sea."""
-    q = (np.ceil(a / STEP) * STEP).astype(np.int16)
-    q[a > 100] = 101
-    q[a <= -200] = NODATA
+def zone_levels():
+    coarse = np.arange(MIN, MAX + 1, STEP)
+    fine = np.arange(FINE_MIN, FINE_MAX + 1, FINE_STEP)
+    return np.union1d(coarse, fine).astype(np.int16)
+
+
+def quantise(a, levels):
+    """flood level -> first zone level >= it; NODATA above MAX."""
+    idx = np.searchsorted(levels, a, side="left")
+    q = levels[np.minimum(idx, len(levels) - 1)]
+    q[a > levels[-1]] = NODATA
     return q
-
-
-def build_zone_raster(name, factor, work):
-    src = SRC
-    if factor > 1:
-        src = work / f"flood_level_{name}.tif"
-        if not src.exists():
-            with rasterio.open(SRC) as ds:
-                res = ds.res[0] * factor
-            run("gdalwarp", "-q", "-overwrite", "-r", "med", "-tr", res, res,
-                "-multi", "-wo", "NUM_THREADS=ALL_CPUS",
-                "-co", "COMPRESS=DEFLATE", "-co", "TILED=YES", "-co", "BIGTIFF=YES",
-                SRC, src)
-    dst = work / f"zones_{name}_{STEP}m.tif"
-    with rasterio.open(src) as ds:
-        profile = ds.profile
-        profile.update(dtype="int16", nodata=NODATA, compress="deflate",
-                       tiled=True, blockxsize=512, blockysize=512, bigtiff="yes")
-        with rasterio.open(dst, "w", **profile) as out:
-            for _, win in ds.block_windows(1):
-                out.write(quantise(ds.read(1, window=win)), 1, window=win)
-    return dst
-
-
-def polygonise_chunk(args):
-    raster, xoff, yoff, w, h, out = args
-    vrt = out.with_suffix(".vrt")
-    run("gdal_translate", "-q", "-of", "VRT", "-srcwin", xoff, yoff, w, h, raster, vrt)
-    out.unlink(missing_ok=True)
-    run("gdal_polygonize.py", "-q", vrt, "-f", "GPKG", out, "zones", "flood_level")
-    vrt.unlink()
-    return out
-
-
-def polygonise(name, raster, work):
-    with rasterio.open(raster) as ds:
-        width, height = ds.width, ds.height
-    chunk_dir = work / f"chunks_{name}_{STEP}m"
-    chunk_dir.mkdir(exist_ok=True)
-    jobs = []
-    for yoff in range(0, height, CHUNK):
-        for xoff in range(0, width, CHUNK):
-            out = chunk_dir / f"{yoff:05d}_{xoff:05d}.gpkg"
-            jobs.append((raster, xoff, yoff, min(CHUNK, width - xoff),
-                         min(CHUNK, height - yoff), out))
-    print(f"  polygonising {len(jobs)} chunk(s) with {JOBS} jobs", flush=True)
-    with ProcessPoolExecutor(JOBS) as pool:
-        parts = list(pool.map(polygonise_chunk, jobs))
-
-    dst = DATA / f"zones_{name}_{STEP}m.gpkg"
-    dst.unlink(missing_ok=True)
-    for i, part in enumerate(parts):
-        run("ogr2ogr", "-f", "GPKG", *(["-append"] if i else []), "-nln", "zones",
-            "-nlt", "PROMOTE_TO_MULTI", "-gt", "65536", dst, part)
-    return dst
 
 
 def main():
@@ -117,13 +69,32 @@ def main():
         sys.exit(f"missing {SRC}; run ./flood_levels.py first")
     work = DATA / "work"
     work.mkdir(parents=True, exist_ok=True)
-    wanted = os.environ.get("LEVELS", ",".join(RESOLUTIONS)).split(",")
-    for name in wanted:
-        t0 = time.time()
-        print(f"{name}: step {STEP} m, factor {RESOLUTIONS[name]}", flush=True)
-        raster = build_zone_raster(name, RESOLUTIONS[name], work)
-        dst = polygonise(name, raster, work)
-        print(f"  -> {dst} ({time.time() - t0:.0f}s)", flush=True)
+
+    resampled = SRC
+    if FACTOR > 1:
+        resampled = work / f"flood_level_x{FACTOR}.tif"
+        if not resampled.exists():
+            with rasterio.open(SRC) as ds:
+                res = ds.res[0] * FACTOR
+            run("gdalwarp", "-q", "-overwrite", "-r", "med", "-tr", res, res,
+                "-multi", "-wo", "NUM_THREADS=ALL_CPUS",
+                "-co", "COMPRESS=DEFLATE", "-co", "TILED=YES",
+                SRC, resampled)
+
+    levels = zone_levels()
+    print("levels:", " ".join(map(str, levels)), flush=True)
+
+    raster = work / "zones.tif"
+    with rasterio.open(resampled) as ds:
+        profile = ds.profile
+        profile.update(dtype="int16", nodata=NODATA, compress="deflate",
+                       tiled=True, blockxsize=512, blockysize=512)
+        with rasterio.open(raster, "w", **profile) as out:
+            out.write(quantise(ds.read(1), levels), 1)
+
+    OUT.unlink(missing_ok=True)
+    run("gdal_polygonize.py", "-q", raster, "-f", "GPKG", OUT, "zones", "flood_level")
+    print(f"-> {OUT}")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,8 @@
-# Coastal zones −200 … +100 m
+# Coastal zones −130 … +70 m
 
-Vector zones for animating global coastlines under changing sea level
-(−200 m to +100 m). Geometry is fixed; the animation only changes styling.
+Vector zones for animating global coastlines under changing sea level, from
+roughly the last glacial maximum (−130 m) to +70 m. Geometry is fixed; the
+animation only changes styling.
 
 Each polygon has one attribute, `flood_level`: the sea level (m) at which that
 area becomes sea **via a connection to the ocean**. A slider at level `L`
@@ -44,11 +45,12 @@ uv venv .venv && uv pip install --python .venv/bin/python numpy numba rasterio
 |------|--------|--------|
 | 1 | `./download_gebco.sh` | `data/gebco/*.tif` (8 × 890 MB) + `gebco_2026.vrt` |
 | 2 | `.venv/bin/python flood_levels.py` | `data/flood_level.tif` (int16, −201…101) |
-| 3 | `.venv/bin/python make_zones.py` | `data/zones_r{0,1,2}_5m.gpkg` |
-| 4 | `./make_tiles.sh` | `data/tiles/coastal_zones_5m.pmtiles` |
+| 3 | `.venv/bin/python make_zones.py` | `data/zones.gpkg` (~440k polygons, 100 MB) |
+| 4 | `./make_tiles.sh` | `data/tiles/coastal_zones.pmtiles` (z0–6, ~20 MB) |
 
-`STEP=10` (or 1, 2, …) for other band widths in steps 3 and 4.
-`flood_levels.py` needs ~15 GB RAM for the global grid.
+`flood_levels.py` keeps the full −200…+100 m range and needs ~17 GB RAM for
+the global grid (~5 min). `make_zones.py` picks the range and steps from it
+(`MIN`, `MAX`, `STEP`, `FINE_MIN`, `FINE_MAX`, `FINE_STEP`, `FACTOR`).
 
 ### flood_level.tif values
 
@@ -60,28 +62,25 @@ uv venv .venv && uv pip install --python .venv/bin/python numpy numba rasterio
 
 ### Zone layer
 
-`flood_level` is rounded **up** to the step (a cell at −3 m is in zone 0 with
-STEP=5). Values: `-195 … 100` in steps, plus `101` for land that stays dry.
-Sea deeper than −200 m has no polygons: use the map background colour.
+The flood level is median-resampled to 4′ (~7 km), then rounded **up** to the
+next zone level:
 
-Resolutions per zoom (one layer `zones`, median-resampled at lower zooms):
+    −130, −125, …, −5, 0, 1, 2, …, 10, 15, 20, …, 70
 
-| source | cell  | zooms |
-|--------|-------|-------|
-| r2     | 4′    | 0–3   |
-| r1     | 1′    | 4–6   |
-| r0     | 15″   | 7–9 (overzoom beyond) |
+1 m steps from 0 to +10 m, 5 m elsewhere. `flood_level = -130` is sea at
+every slider position (the oceans); land that stays dry above +70 m has no
+polygon, so the map background is the land colour.
 
 ## MapLibre
 
 ```js
-map.addSource('coast', { type: 'vector', url: 'pmtiles://coastal_zones_5m.pmtiles' });
+map.addSource('coast', { type: 'vector', url: 'pmtiles://coastal_zones.pmtiles' });
 map.addLayer({
   id: 'coast-zones', type: 'fill', source: 'coast', 'source-layer': 'zones',
   paint: {
     'fill-color': ['case',
       ['<=', ['get', 'flood_level'], ['global-state', 'sea_level']], '#9cc3e6',
-      '#e8e0c8'],
+      'rgba(0,0,0,0)'],
     'fill-antialias': false
   }
 });
