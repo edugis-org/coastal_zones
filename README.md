@@ -54,7 +54,7 @@ uv venv .venv && uv pip install --python .venv/bin/python numpy numba rasterio p
 | 1 | `./download_gebco.sh` | `data/gebco/*.tif` (8 × 890 MB) + `gebco_2026.vrt` |
 | 2 | `.venv/bin/python flood_levels.py` | `data/flood_level.tif` (int16, −201…101) |
 | 3 | `.venv/bin/python make_zones.py` | `data/zones.gpkg`: `zones` (4′, ~450k polygons) plus `zones_z0_1` (16′) and `zones_z2` (8′) |
-| 4 | `./make_tiles.sh` | `data/tiles/coastal_zones.pmtiles` (z0–6, ~15 MB), then `tile_stats.py` |
+| 4 | `./make_tiles.sh` | `data/tiles/coastal_zones.pmtiles` (z0–6, ~15 MB), then `tile_stats.py`; and `coastal_zones_16m.geojson` (the 16′ layer, ~10 MB, 0.8 MB gzipped) for engines without PMTiles |
 
 Low zooms are tiled from the coarser layers, all under the one source layer
 `zones`. At z0 a screen pixel is ~40′, so 4′ zones are sub-pixel slivers, and a
@@ -115,12 +115,13 @@ with `map.setPaintProperty` on each slider change.)
 
 ## Download
 
-The tile archive is published as a release asset, so it needs no build:
+The tile archive, and the same zones at 16′ as GeoJSON (`coastal_zones_16m.geojson`, for map engines that cannot read PMTiles), are published as release assets, so they need no build:
 
 ```bash
-gh release download --repo edugis-org/coastal_zones --pattern coastal_zones.pmtiles
+gh release download --repo edugis-org/coastal_zones --pattern 'coastal_zones*'
 # or
 curl -LO https://github.com/edugis-org/coastal_zones/releases/latest/download/coastal_zones.pmtiles
+curl -LO https://github.com/edugis-org/coastal_zones/releases/latest/download/coastal_zones_16m.geojson
 ```
 
 Release assets are not served with CORS headers, so a browser cannot read

@@ -59,3 +59,12 @@ ogr2ogr -f PMTiles "$OUT" "$SRC" $LAYERS \
 
 echo "  -> $OUT ($(du -h "$OUT" | cut -f1))"
 "$HERE/.venv/bin/python" "$HERE/tile_stats.py" "$OUT"
+
+# The same zones as one GeoJSON file, for engines that cannot read PMTiles
+# (webmapx on OpenLayers, which reads it once into any view projection). The
+# 16' layer is finer than a screen pixel on any world map; 10 MB, 0.8 MB gzipped.
+GEOJSON="${GEOJSON:-$(dirname "$OUT")/coastal_zones_16m.geojson}"
+rm -f "$GEOJSON"
+ogr2ogr -f GeoJSON "$GEOJSON" "$SRC" zones_z0_1 -nln zones \
+    -lco COORDINATE_PRECISION=4 -lco RFC7946=YES
+echo "  -> $GEOJSON ($(du -h "$GEOJSON" | cut -f1))"
