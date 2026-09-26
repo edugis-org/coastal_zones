@@ -19,6 +19,13 @@ the present coastline:
 The native 15" GEBCO grid is median-resampled by FACTOR first (default 16,
 i.e. 4' ~ 7 km), which is plenty for a global animation.
 
+Low zooms get coarser layers of their own (OVERVIEWS): at z0 one screen pixel
+is ~40', so 4' zones are sub-pixel slivers, and a world tile holding all of
+them (340k polygons, 8 MB) exceeds the tiler's size limit, which then drops
+features silently — holes through which today's sea shows. `zones_z0_1` (16')
+and `zones_z2` (8') are tiled at those zooms under the same layer name
+(`make_tiles.sh`).
+
 Usage:
     ./make_zones.py
     STEP=10 FINE_MAX=20 ./make_zones.py
@@ -45,6 +52,9 @@ FINE_STEP = int(os.environ.get("FINE_STEP", "1"))
 FACTOR = int(os.environ.get("FACTOR", "16"))
 NODATA = -32768
 OUT = DATA / "zones.gpkg"
+# Coarser layers for low zooms: layer name -> resample factor. The name says
+# which zooms it is tiled at (zones_z<min>[_<max>]); make_tiles.sh reads it.
+OVERVIEWS = {"zones_z0_1": 64, "zones_z2": 32}
 
 
 def run(*cmd):
@@ -66,36 +76,46 @@ def quantise(a, levels):
     return q
 
 
+def resample(work, factor):
+    if factor <= 1:
+        return SRC
+    resampled = work / f"flood_level_x{factor}.tif"
+    if not resampled.exists():
+        with rasterio.open(SRC) as ds:
+            res = ds.res[0] * factor
+        run("gdalwarp", "-q", "-overwrite", "-r", "med", "-tr", res, res,
+            "-multi", "-wo", "NUM_THREADS=ALL_CPUS",
+            "-co", "COMPRESS=DEFLATE", "-co", "TILED=YES",
+            SRC, resampled)
+    return resampled
+
+
+def polygonize(work, factor, levels, layer):
+    raster = work / f"zones_x{factor}.tif"
+    with rasterio.open(resample(work, factor)) as ds:
+        profile = ds.profile
+        profile.update(dtype="int16", nodata=NODATA, compress="deflate",
+                       tiled=True, blockxsize=512, blockysize=512)
+        with rasterio.open(raster, "w", **profile) as out:
+            out.write(quantise(ds.read(1), levels), 1)
+    # A second layer is added to the existing GeoPackage.
+    run("gdal_polygonize.py", "-q", raster, "-f", "GPKG", OUT, layer, "flood_level")
+    print(f"  {layer}: {factor * 15 / 60:g}'", flush=True)
+
+
 def main():
     if not SRC.exists():
         sys.exit(f"missing {SRC}; run ./flood_levels.py first")
     work = DATA / "work"
     work.mkdir(parents=True, exist_ok=True)
 
-    resampled = SRC
-    if FACTOR > 1:
-        resampled = work / f"flood_level_x{FACTOR}.tif"
-        if not resampled.exists():
-            with rasterio.open(SRC) as ds:
-                res = ds.res[0] * FACTOR
-            run("gdalwarp", "-q", "-overwrite", "-r", "med", "-tr", res, res,
-                "-multi", "-wo", "NUM_THREADS=ALL_CPUS",
-                "-co", "COMPRESS=DEFLATE", "-co", "TILED=YES",
-                SRC, resampled)
-
     levels = zone_levels()
     print("levels:", " ".join(map(str, levels)), flush=True)
 
-    raster = work / "zones.tif"
-    with rasterio.open(resampled) as ds:
-        profile = ds.profile
-        profile.update(dtype="int16", nodata=NODATA, compress="deflate",
-                       tiled=True, blockxsize=512, blockysize=512)
-        with rasterio.open(raster, "w", **profile) as out:
-            out.write(quantise(ds.read(1), levels), 1)
-
     OUT.unlink(missing_ok=True)
-    run("gdal_polygonize.py", "-q", raster, "-f", "GPKG", OUT, "zones", "flood_level")
+    polygonize(work, FACTOR, levels, "zones")
+    for layer, factor in OVERVIEWS.items():
+        polygonize(work, factor, levels, layer)
     print(f"-> {OUT}")
 
 

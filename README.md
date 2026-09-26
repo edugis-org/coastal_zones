@@ -46,15 +46,23 @@ buildings/vegetation included), so low-lying coasts are only indicative.
 Requires GDAL ≥ 3.8 (PMTiles driver) and a venv with numpy, numba, rasterio:
 
 ```bash
-uv venv .venv && uv pip install --python .venv/bin/python numpy numba rasterio
+uv venv .venv && uv pip install --python .venv/bin/python numpy numba rasterio pmtiles
 ```
 
 | step | script | output |
 |------|--------|--------|
 | 1 | `./download_gebco.sh` | `data/gebco/*.tif` (8 × 890 MB) + `gebco_2026.vrt` |
 | 2 | `.venv/bin/python flood_levels.py` | `data/flood_level.tif` (int16, −201…101) |
-| 3 | `.venv/bin/python make_zones.py` | `data/zones.gpkg` (~440k polygons, 100 MB) |
-| 4 | `./make_tiles.sh` | `data/tiles/coastal_zones.pmtiles` (z0–6, ~20 MB) |
+| 3 | `.venv/bin/python make_zones.py` | `data/zones.gpkg`: `zones` (4′, ~450k polygons) plus `zones_z0_1` (16′) and `zones_z2` (8′) |
+| 4 | `./make_tiles.sh` | `data/tiles/coastal_zones.pmtiles` (z0–6, ~15 MB), then `tile_stats.py` |
+
+Low zooms are tiled from the coarser layers, all under the one source layer
+`zones`. At z0 a screen pixel is ~40′, so 4′ zones are sub-pixel slivers, and a
+world tile holding all of them (340k polygons) exceeded the tiler's size limit
+— GDAL then drops features without a word, and every dropped zone is a hole
+through which the basemap's sea shows (the Bering land bridge at −134 m, on
+small maps only). `MAX_SIZE` is now far above what any tile needs, and
+`tile_stats.py` prints the largest tile per zoom after every build.
 
 `flood_levels.py` keeps the full −200…+100 m range and needs ~17 GB RAM for
 the global grid (~5 min). `make_zones.py` picks the range and steps from it
