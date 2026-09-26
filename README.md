@@ -113,3 +113,5 @@ with `map.setPaintProperty` on each slider change.)
 - The Mediterranean disconnection (Messinian, ~5 Ma ago) is not included.
 - A more precise model for the Netherlands, Belgium and Bangladesh would be
   nice.
+- Check whether land ice cover (extent of the ice sheets) is known for the
+  last 21,000 years, to show it alongside the sea level.
