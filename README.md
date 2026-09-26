@@ -65,13 +65,16 @@ the global grid (~5 min). `make_zones.py` picks the range and steps from it
 The flood level is median-resampled to 4′ (~7 km), then rounded **up** to the
 next zone level:
 
-    −130, −125, …, −5, 0, 1, 2, …, 10, 15, 20, …, 70
+    −130, −125, …, −5, −1, 0, 1, …, 10, 15, 20, …, 70
 
-1 m steps from 0 to +10 m, 5 m elsewhere. So zone `0` holds −5 < level ≤ 0:
-shallow sea today, water at sea level 0; the first land zone is `1`.
-`flood_level = -130` is sea at
-every slider position (the oceans); land that stays dry above +70 m has no
-polygon, so the map background is the land colour.
+1 m steps from −1 to +10 m, 5 m elsewhere, so today's coastline is the edge
+between zones `0` (water at sea level 0) and `1` (first land zone).
+`flood_level = -130` is sea at every slider position (the oceans); land that
+stays dry above +70 m has no polygon.
+
+Styling at sea level `L`: `flood_level <= L` is water, `L < flood_level <= 0`
+is dry sea floor (land colour), anything else transparent so the basemap
+shows today's land and lakes (e.g. the Caspian below its +25 m overflow).
 
 ## MapLibre
 

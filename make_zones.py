@@ -9,7 +9,7 @@ Zone levels run MIN..MAX (default -130..+70 m: roughly the last glacial
 maximum up to beyond any melt scenario) in STEP metres, with finer FINE_STEP
 steps between FINE_MIN and FINE_MAX around the present coastline:
 
-    -130, -125, ..., -5, 0, 1, 2, ..., 10, 15, 20, ..., 70
+    -130, -125, ..., -5, -1, 0, 1, ..., 10, 15, 20, ..., 70
 
     flood_level = MIN        sea at every slider position
     flood_level = level      becomes sea at that level
@@ -38,7 +38,7 @@ SRC = DATA / "flood_level.tif"
 MIN = int(os.environ.get("MIN", "-130"))
 MAX = int(os.environ.get("MAX", "70"))
 STEP = int(os.environ.get("STEP", "5"))
-FINE_MIN = int(os.environ.get("FINE_MIN", "0"))
+FINE_MIN = int(os.environ.get("FINE_MIN", "-1"))
 FINE_MAX = int(os.environ.get("FINE_MAX", "10"))
 FINE_STEP = int(os.environ.get("FINE_STEP", "1"))
 FACTOR = int(os.environ.get("FACTOR", "16"))
